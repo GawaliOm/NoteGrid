@@ -337,7 +337,7 @@ export default function App() {
               </div>
 
               <div style={{ paddingBottom: '120px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '32px', borderBottom: '1px solid var(--card-border)', paddingBottom: '16px' }}>
+                <div className="preview-header">
                   <h2 style={{ fontSize: '1.5rem', fontWeight: '600' }}>Document Preview</h2>
                   <span style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>Cloud-hosted PDF</span>
                 </div>
@@ -394,15 +394,15 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
+              <div className="admin-header">
                 <h1 style={{ fontSize: '2rem', fontWeight: '700' }}>Admin Dashboard</h1>
                 <button className="btn btn-secondary" onClick={() => setActiveView('subjects')}>Exit Admin</button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
+              <div className="admin-grid">
 
                 {/* Upload Section */}
-                <div style={{ background: 'var(--card-bg)', padding: '32px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+                <div className="admin-card">
                   <h2 style={{ fontSize: '1.25rem', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}><Plus size={20} /> Upload to Cloud</h2>
                   <form onSubmit={handleAddNote}>
                     <div className="input-group" style={{ marginTop: 0 }}>
@@ -420,7 +420,7 @@ export default function App() {
                 </div>
 
                 {/* Manage Notes Section */}
-                <div style={{ background: 'var(--card-bg)', padding: '32px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)', maxHeight: '400px', overflowY: 'auto' }}>
+                <div className="admin-card admin-card-scrollable">
                   <h2 style={{ fontSize: '1.25rem', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}><FileText size={20} /> Cloud Library</h2>
                   {subjects.length === 0 ? <p style={{ color: 'var(--text-tertiary)' }}>No notes uploaded yet.</p> : null}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -436,12 +436,13 @@ export default function App() {
                 </div>
 
                 {/* User Requests Section */}
-                <div style={{ gridColumn: '1 / -1', background: 'var(--card-bg)', padding: '32px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+                <div className="admin-card admin-card-full">
                   <h2 style={{ fontSize: '1.25rem', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}><MessageSquare size={20} /> User Requests</h2>
                   {userRequests.length === 0 ? (
                     <p style={{ color: 'var(--text-tertiary)' }}>No requests yet.</p>
                   ) : (
-                    <table className="admin-table">
+                    <div className="admin-table-container">
+                      <table className="admin-table">
                       <thead>
                         <tr>
                           <th>Requested Subject</th>
@@ -463,16 +464,18 @@ export default function App() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
                   )}
                 </div>
 
                 {/* Collected Emails Section */}
-                <div style={{ gridColumn: '1 / -1', background: 'var(--card-bg)', padding: '32px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+                <div className="admin-card admin-card-full">
                   <h2 style={{ fontSize: '1.25rem', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}><Mail size={20} /> Captured Leads</h2>
                   {capturedEmails.length === 0 ? (
                     <p style={{ color: 'var(--text-tertiary)' }}>No emails captured yet.</p>
                   ) : (
-                    <table className="admin-table">
+                    <div className="admin-table-container">
+                      <table className="admin-table">
                       <thead>
                         <tr>
                           <th>Email</th>
@@ -490,6 +493,7 @@ export default function App() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
                   )}
                 </div>
 
