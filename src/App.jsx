@@ -735,9 +735,6 @@ export default function App() {
           <a href="mailto:gawali.om006@gmail.com" style={{ color: 'inherit', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Mail size={14} /> gawali.om006@gmail.com
           </a>
-          <button onClick={() => setIsFeedbackModalOpen(true)} className="btn btn-text" style={{ fontSize: '0.875rem', gap: '4px', color: 'var(--text-tertiary)' }}>
-            <MessageSquare size={14} /> Feedback
-          </button>
         </div>
         <p>Your ultimate source for high-quality study notes.</p>
       </footer>
@@ -1082,6 +1079,19 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Floating Feedback Button */}
+      <motion.div 
+        className="floating-feedback-btn"
+        onClick={() => setIsFeedbackModalOpen(true)}
+        initial={{ scale: 0, rotate: -45 }}
+        animate={{ scale: 1, rotate: 0 }}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+      >
+        <MessageSquare size={24} />
+        <span>Give Feedback</span>
+      </motion.div>
 
     </>
   );
