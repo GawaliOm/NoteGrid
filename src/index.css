@@ -199,7 +199,7 @@ body {
 /* Grid & Cards */
 .grid-container {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 32px;
   padding-bottom: 120px;
 }
@@ -579,6 +579,14 @@ body {
   .modal-content {
     padding: 32px 20px;
   }
+
+  .nav-btn-text {
+    display: none;
+  }
+
+  .navbar-actions {
+    gap: 4px;
+  }
 }
 
 .floating-feedback-btn {
@@ -634,5 +642,9 @@ body {
     right: 24px;
     width: 48px;
     height: 48px;
+  }
+
+  .floating-feedback-btn:hover span {
+    display: none;
   }
 }

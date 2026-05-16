@@ -79,17 +79,17 @@ export default function App() {
   const fetchNotes = async () => {
     const { data: notes, error: notesError } = await supabase.from('notes').select('*');
     const { data: uploads, error: uploadsError } = await supabase.from('user_uploads').select('*');
-    
+
     if (!notesError && !uploadsError) {
       const formattedNotes = notes.map(n => ({ ...n, type: 'admin' }));
-      const formattedUploads = uploads.map(u => ({ 
-        ...u, 
-        title: u.subject ? `${u.subject} Notes` : 'Student Notes', 
+      const formattedUploads = uploads.map(u => ({
+        ...u,
+        title: u.subject ? `${u.subject} Notes` : 'Student Notes',
         author: u.name,
         type: 'user'
       }));
-      
-      const allNotes = [...formattedNotes, ...formattedUploads].sort((a, b) => 
+
+      const allNotes = [...formattedNotes, ...formattedUploads].sort((a, b) =>
         new Date(b.created_at) - new Date(a.created_at)
       );
       setSubjects(allNotes);
@@ -372,7 +372,7 @@ export default function App() {
       <header className="navbar container">
         <div className="logo" onClick={() => { setActiveView('subjects'); window.scrollTo(0, 0); }} style={{ cursor: 'pointer' }}>
           <BookOpen size={28} />
-          <span>NoteGrid</span>
+          <span>NotesGrid</span>
         </div>
 
         <div className="search-container">
@@ -386,22 +386,22 @@ export default function App() {
         </div>
 
         <div className="navbar-actions">
-          <button 
-            onClick={() => setIsDarkMode(!isDarkMode)} 
-            className="btn btn-secondary" 
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="btn btn-secondary"
             style={{ padding: '8px', borderRadius: '50%', width: '40px', height: '40px', justifyContent: 'center' }}
             title="Toggle Theme"
           >
             {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
           </button>
           <button onClick={() => setIsUploadModalOpen(true)} className="btn btn-text" style={{ fontSize: '0.875rem', gap: '4px' }}>
-            <UploadCloud size={16} /> Upload
+            <UploadCloud size={16} /> <span className="nav-btn-text">Upload</span>
           </button>
           <button onClick={() => setIsRequestModalOpen(true)} className="btn btn-text" style={{ fontSize: '0.875rem', gap: '4px' }}>
-            <MessageSquare size={16} /> Request
+            <MessageSquare size={16} /> <span className="nav-btn-text">Request</span>
           </button>
           <button onClick={openAdminLogin} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', padding: '8px 16px' }}>
-            <Shield size={16} /> Admin
+            <Shield size={16} /> <span className="nav-btn-text">Admin</span>
           </button>
         </div>
       </header>
@@ -632,28 +632,28 @@ export default function App() {
                   ) : (
                     <div className="admin-table-container">
                       <table className="admin-table">
-                      <thead>
-                        <tr>
-                          <th>Requested Subject</th>
-                          <th>Date</th>
-                          <th>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {userRequests.map((req, i) => (
-                          <tr key={i}>
-                            <td style={{ fontWeight: '500' }}>{req.title}</td>
-                            <td style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>{new Date(req.created_at).toLocaleString()}</td>
-                            <td>
-                              <button onClick={() => handleDeleteRequest(req.id)} style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer' }}>
-                                <Trash2 size={16} />
-                              </button>
-                            </td>
+                        <thead>
+                          <tr>
+                            <th>Requested Subject</th>
+                            <th>Date</th>
+                            <th>Action</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {userRequests.map((req, i) => (
+                            <tr key={i}>
+                              <td style={{ fontWeight: '500' }}>{req.title}</td>
+                              <td style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>{new Date(req.created_at).toLocaleString()}</td>
+                              <td>
+                                <button onClick={() => handleDeleteRequest(req.id)} style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer' }}>
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
 
@@ -665,24 +665,24 @@ export default function App() {
                   ) : (
                     <div className="admin-table-container">
                       <table className="admin-table">
-                      <thead>
-                        <tr>
-                          <th>Email</th>
-                          <th>Subject</th>
-                          <th>Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {capturedEmails.map((entry, i) => (
-                          <tr key={i}>
-                            <td style={{ fontWeight: '500' }}>{entry.email}</td>
-                            <td style={{ color: 'var(--text-secondary)' }}>{entry.subject}</td>
-                            <td style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>{new Date(entry.created_at).toLocaleString()}</td>
+                        <thead>
+                          <tr>
+                            <th>Email</th>
+                            <th>Subject</th>
+                            <th>Date</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {capturedEmails.map((entry, i) => (
+                            <tr key={i}>
+                              <td style={{ fontWeight: '500' }}>{entry.email}</td>
+                              <td style={{ color: 'var(--text-secondary)' }}>{entry.subject}</td>
+                              <td style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>{new Date(entry.created_at).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
 
@@ -731,7 +731,7 @@ export default function App() {
       {/* Subtle Footer */}
       <footer className="container" style={{ padding: '60px 24px', marginTop: '60px', borderTop: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>
         <div style={{ display: 'flex', gap: '20px' }}>
-          <span>© 2026 NoteGrid</span>
+          <span>© 2026 NotesGrid</span>
           <a href="mailto:gawali.om006@gmail.com" style={{ color: 'inherit', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Mail size={14} /> gawali.om006@gmail.com
           </a>
@@ -963,7 +963,7 @@ export default function App() {
                   <div className="modal-icon"><MessageSquare size={28} /></div>
                   <h3 style={{ fontSize: '1.5rem', marginBottom: '12px', fontWeight: '600' }}>Your Feedback</h3>
                   <p style={{ color: 'var(--text-secondary)', marginBottom: '32px', fontSize: '0.95rem' }}>
-                    We'd love to hear your suggestions to improve NoteGrid.
+                    We'd love to hear your suggestions to improve NotesGrid.
                   </p>
                   <form onSubmit={handleFeedbackSubmit}>
                     <div className="input-group" style={{ textAlign: 'left', marginTop: 0 }}>
@@ -1081,7 +1081,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Floating Feedback Button */}
-      <motion.div 
+      <motion.div
         className="floating-feedback-btn"
         onClick={() => setIsFeedbackModalOpen(true)}
         initial={{ scale: 0, rotate: -45 }}
