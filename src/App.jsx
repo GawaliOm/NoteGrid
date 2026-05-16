@@ -683,6 +683,7 @@ export default function App() {
                       </tbody>
                     </table>
                   </div>
+                  )}
                 </div>
 
                 {/* User Feedback Section */}
