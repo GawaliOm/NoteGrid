@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, FileText, X, ArrowLeft, Lock, Download, CheckCircle, Shield, User, Trash2, Plus, Mail, Search, MessageSquare } from 'lucide-react';
+import { BookOpen, FileText, X, ArrowLeft, Lock, Download, CheckCircle, Shield, User, Trash2, Plus, Mail, Search, MessageSquare, Moon, Sun, UploadCloud } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -42,23 +42,69 @@ export default function App() {
   // Admin Dashboard State
   const [capturedEmails, setCapturedEmails] = useState([]);
   const [userRequests, setUserRequests] = useState([]);
+  const [studentContributions, setStudentContributions] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Theme State
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  });
+
+  // User Upload State
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isUploadSuccess, setIsUploadSuccess] = useState(false);
+
+  // Feedback State
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [isFeedbackSuccess, setIsFeedbackSuccess] = useState(false);
+  const [userFeedback, setUserFeedback] = useState([]);
 
   // Load Data on Mount
   useEffect(() => {
     fetchNotes();
   }, []);
 
+  // Theme Effect
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
+
   const fetchNotes = async () => {
-    const { data, error } = await supabase.from('notes').select('*').order('created_at', { ascending: false });
-    if (!error) setSubjects(data);
+    const { data: notes, error: notesError } = await supabase.from('notes').select('*');
+    const { data: uploads, error: uploadsError } = await supabase.from('user_uploads').select('*');
+    
+    if (!notesError && !uploadsError) {
+      const formattedNotes = notes.map(n => ({ ...n, type: 'admin' }));
+      const formattedUploads = uploads.map(u => ({ 
+        ...u, 
+        title: u.subject ? `${u.subject} Notes` : 'Student Notes', 
+        author: u.name,
+        type: 'user'
+      }));
+      
+      const allNotes = [...formattedNotes, ...formattedUploads].sort((a, b) => 
+        new Date(b.created_at) - new Date(a.created_at)
+      );
+      setSubjects(allNotes);
+    }
   };
 
   const fetchAdminData = async () => {
     const { data: emails } = await supabase.from('captured_emails').select('*').order('created_at', { ascending: false });
     const { data: requests } = await supabase.from('user_requests').select('*').order('created_at', { ascending: false });
+    const { data: contributions } = await supabase.from('user_uploads').select('*').order('created_at', { ascending: false });
+    const { data: feedbackData } = await supabase.from('feedback').select('*').order('created_at', { ascending: false });
     if (emails) setCapturedEmails(emails);
     if (requests) setUserRequests(requests);
+    if (contributions) setStudentContributions(contributions);
+    if (feedbackData) setUserFeedback(feedbackData);
   };
 
   // --------------- VIEW LOGIC ---------------
@@ -234,6 +280,86 @@ export default function App() {
     fetchAdminData();
   };
 
+  const handleUserUpload = async (e) => {
+    e.preventDefault();
+    const name = e.target.name.value;
+    const studentClass = e.target.studentClass.value;
+    const subject = e.target.subject.value;
+    const file = e.target.file.files[0];
+
+    if (!file || !name || !studentClass || !subject) return;
+
+    setIsUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `user_${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `user_uploads/${fileName}`;
+
+      // Upload file to storage
+      const { error: uploadError } = await supabase.storage.from('pdfs').upload(filePath, file);
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage.from('pdfs').getPublicUrl(filePath);
+
+      // Insert metadata into table
+      const { error: insertError } = await supabase.from('user_uploads').insert([
+        { name, student_class: studentClass, subject, pdf_url: publicUrl }
+      ]);
+      if (insertError) throw insertError;
+
+      setIsUploadSuccess(true);
+      fetchNotes(); // Refresh library
+      setTimeout(() => {
+        setIsUploadModalOpen(false);
+        setIsUploadSuccess(false);
+      }, 2000);
+      e.target.reset();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to upload material: " + err.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDeleteContribution = async (contribution) => {
+    if (!confirm("Are you sure you want to delete this contribution?")) return;
+
+    const urlParts = contribution.pdf_url.split('/');
+    const fileName = urlParts[urlParts.length - 1];
+    const filePath = `user_uploads/${fileName}`;
+
+    await supabase.storage.from('pdfs').remove([filePath]);
+    await supabase.from('user_uploads').delete().eq('id', contribution.id);
+
+    fetchAdminData();
+  };
+
+  const handleFeedbackSubmit = async (e) => {
+    e.preventDefault();
+    const name = e.target.name.value;
+    const suggestion = e.target.suggestion.value;
+
+    if (!name || !suggestion) return;
+
+    const { error } = await supabase.from('feedback').insert([{ name, suggestion }]);
+
+    if (!error) {
+      setIsFeedbackSuccess(true);
+      setTimeout(() => {
+        setIsFeedbackModalOpen(false);
+        setIsFeedbackSuccess(false);
+      }, 2000);
+      e.target.reset();
+    }
+  };
+
+  const handleDeleteFeedback = async (id) => {
+    await supabase.from('feedback').delete().eq('id', id);
+    fetchAdminData();
+  };
+
 
   // --------------- UI COMPONENTS ---------------
 
@@ -260,6 +386,17 @@ export default function App() {
         </div>
 
         <div className="navbar-actions">
+          <button 
+            onClick={() => setIsDarkMode(!isDarkMode)} 
+            className="btn btn-secondary" 
+            style={{ padding: '8px', borderRadius: '50%', width: '40px', height: '40px', justifyContent: 'center' }}
+            title="Toggle Theme"
+          >
+            {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+          <button onClick={() => setIsUploadModalOpen(true)} className="btn btn-text" style={{ fontSize: '0.875rem', gap: '4px' }}>
+            <UploadCloud size={16} /> Upload
+          </button>
           <button onClick={() => setIsRequestModalOpen(true)} className="btn btn-text" style={{ fontSize: '0.875rem', gap: '4px' }}>
             <MessageSquare size={16} /> Request
           </button>
@@ -310,7 +447,16 @@ export default function App() {
                           <span style={{ color: 'white', marginTop: '8px', fontWeight: '500' }}>View Notes</span>
                         </div>
                       </div>
-                      <h3 className="card-title">{subject.title}</h3>
+                      <div className="card-content">
+                        <h3 className="card-title">{subject.title}</h3>
+                        <div className="card-metadata">
+                          {subject.author && <span className="card-author">by {subject.author}</span>}
+                          <div className="card-tags">
+                            {subject.student_class && <span className="card-tag">{subject.student_class}</span>}
+                            {subject.subject && <span className="card-tag">{subject.subject}</span>}
+                          </div>
+                        </div>
+                      </div>
                     </motion.div>
                   ))}
                 </div>
@@ -425,7 +571,7 @@ export default function App() {
                   {subjects.length === 0 ? <p style={{ color: 'var(--text-tertiary)' }}>No notes uploaded yet.</p> : null}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {subjects.map(s => (
-                      <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#F5F5F5', borderRadius: '8px', border: '1px solid var(--card-border)' }}>
+                      <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: 'var(--input-bg)', borderRadius: '8px', border: '1px solid var(--card-border)' }}>
                         <span style={{ fontWeight: '500' }}>{s.title}</span>
                         <button onClick={() => handleDeleteNote(s)} style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
                           <Trash2 size={18} />
@@ -433,6 +579,49 @@ export default function App() {
                       </div>
                     ))}
                   </div>
+                </div>
+
+                {/* Student Contributions Section */}
+                <div className="admin-card admin-card-full">
+                  <h2 style={{ fontSize: '1.25rem', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}><UploadCloud size={20} /> Student Contributions</h2>
+                  {studentContributions.length === 0 ? (
+                    <p style={{ color: 'var(--text-tertiary)' }}>No student contributions yet.</p>
+                  ) : (
+                    <div className="admin-table-container">
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            <th>Student Name</th>
+                            <th>Class</th>
+                            <th>Subject</th>
+                            <th>Material</th>
+                            <th>Date</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {studentContributions.map((con, i) => (
+                            <tr key={con.id}>
+                              <td style={{ fontWeight: '500' }}>{con.name}</td>
+                              <td>{con.student_class}</td>
+                              <td>{con.subject}</td>
+                              <td>
+                                <a href={con.pdf_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-primary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <FileText size={14} /> View PDF
+                                </a>
+                              </td>
+                              <td style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>{new Date(con.created_at).toLocaleString()}</td>
+                              <td>
+                                <button onClick={() => handleDeleteContribution(con)} style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer' }}>
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
                 {/* User Requests Section */}
@@ -494,6 +683,40 @@ export default function App() {
                       </tbody>
                     </table>
                   </div>
+                </div>
+
+                {/* User Feedback Section */}
+                <div className="admin-card admin-card-full">
+                  <h2 style={{ fontSize: '1.25rem', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}><MessageSquare size={20} /> User Feedback</h2>
+                  {userFeedback.length === 0 ? (
+                    <p style={{ color: 'var(--text-tertiary)' }}>No feedback received yet.</p>
+                  ) : (
+                    <div className="admin-table-container">
+                      <table className="admin-table">
+                        <thead>
+                          <tr>
+                            <th>User Name</th>
+                            <th>Suggestion</th>
+                            <th>Date</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {userFeedback.map((fb, i) => (
+                            <tr key={fb.id}>
+                              <td style={{ fontWeight: '500' }}>{fb.name}</td>
+                              <td style={{ maxWidth: '400px' }}>{fb.suggestion}</td>
+                              <td style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>{new Date(fb.created_at).toLocaleString()}</td>
+                              <td>
+                                <button onClick={() => handleDeleteFeedback(fb.id)} style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer' }}>
+                                  <Trash2 size={16} />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
 
@@ -511,6 +734,9 @@ export default function App() {
           <a href="mailto:gawali.om006@gmail.com" style={{ color: 'inherit', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Mail size={14} /> gawali.om006@gmail.com
           </a>
+          <button onClick={() => setIsFeedbackModalOpen(true)} className="btn btn-text" style={{ fontSize: '0.875rem', gap: '4px', color: 'var(--text-tertiary)' }}>
+            <MessageSquare size={14} /> Feedback
+          </button>
         </div>
         <p>Your ultimate source for high-quality study notes.</p>
       </footer>
@@ -625,6 +851,164 @@ export default function App() {
                   <button className="btn btn-primary w-full" style={{ justifyContent: 'center' }} onClick={handleDownload}>
                     Download Now <Download size={18} />
                   </button>
+                </motion.div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* User Upload Modal */}
+      <AnimatePresence>
+        {isUploadModalOpen && (
+          <motion.div
+            className="modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsUploadModalOpen(false)}
+          >
+            <motion.div
+              className="modal-content"
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button className="close-btn" onClick={() => setIsUploadModalOpen(false)}><X size={20} /></button>
+
+              {!isUploadSuccess ? (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <div className="modal-icon"><UploadCloud size={28} /></div>
+                  <h3 style={{ fontSize: '1.5rem', marginBottom: '12px', fontWeight: '600' }}>Contribute Material</h3>
+                  <p style={{ color: 'var(--text-secondary)', marginBottom: '32px', fontSize: '0.95rem' }}>
+                    Share your notes with others. Upload your PDF materials here.
+                  </p>
+                  <form onSubmit={handleUserUpload}>
+                    <div className="input-group" style={{ textAlign: 'left', marginTop: 0 }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Full Name</label>
+                      <input
+                        type="text"
+                        name="name"
+                        placeholder="Your Name"
+                        required
+                      />
+                    </div>
+                    <div className="input-group" style={{ textAlign: 'left' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Class / Grade</label>
+                      <input
+                        type="text"
+                        name="studentClass"
+                        placeholder="e.g. 10th Standard, B.Tech CS"
+                        required
+                      />
+                    </div>
+                    <div className="input-group" style={{ textAlign: 'left' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Subject</label>
+                      <input
+                        type="text"
+                        name="subject"
+                        placeholder="e.g. Mathematics, Physics..."
+                        required
+                      />
+                    </div>
+                    <div className="input-group" style={{ textAlign: 'left' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>PDF Material</label>
+                      <input
+                        type="file"
+                        name="file"
+                        accept=".pdf"
+                        required
+                        style={{ padding: '10px' }}
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary w-full" style={{ justifyContent: 'center' }} disabled={isUploading}>
+                      {isUploading ? 'Uploading...' : 'Upload Material'}
+                    </button>
+                  </form>
+                </motion.div>
+              ) : (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <div className="modal-icon" style={{ background: 'var(--accent-primary)', color: 'var(--card-bg)' }}><CheckCircle size={28} /></div>
+                  <h3 style={{ fontSize: '1.5rem', marginBottom: '12px', fontWeight: '600' }}>Thank You!</h3>
+                  <p style={{ color: 'var(--text-secondary)', marginBottom: '32px', fontSize: '0.95rem' }}>
+                    Your contribution has been received and will be reviewed shortly.
+                  </p>
+                </motion.div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Feedback Modal */}
+      <AnimatePresence>
+        {isFeedbackModalOpen && (
+          <motion.div
+            className="modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsFeedbackModalOpen(false)}
+          >
+            <motion.div
+              className="modal-content"
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button className="close-btn" onClick={() => setIsFeedbackModalOpen(false)}><X size={20} /></button>
+
+              {!isFeedbackSuccess ? (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <div className="modal-icon"><MessageSquare size={28} /></div>
+                  <h3 style={{ fontSize: '1.5rem', marginBottom: '12px', fontWeight: '600' }}>Your Feedback</h3>
+                  <p style={{ color: 'var(--text-secondary)', marginBottom: '32px', fontSize: '0.95rem' }}>
+                    We'd love to hear your suggestions to improve NoteGrid.
+                  </p>
+                  <form onSubmit={handleFeedbackSubmit}>
+                    <div className="input-group" style={{ textAlign: 'left', marginTop: 0 }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Name</label>
+                      <input
+                        type="text"
+                        name="name"
+                        placeholder="Your Name"
+                        required
+                      />
+                    </div>
+                    <div className="input-group" style={{ textAlign: 'left' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Suggestions</label>
+                      <textarea
+                        name="suggestion"
+                        placeholder="What can we do better?"
+                        required
+                        style={{
+                          width: '100%',
+                          padding: '14px 16px',
+                          background: 'var(--input-bg)',
+                          border: '1px solid var(--card-border)',
+                          borderRadius: 'var(--radius-sm)',
+                          color: 'var(--text-primary)',
+                          fontFamily: 'inherit',
+                          fontSize: '1rem',
+                          minHeight: '120px',
+                          resize: 'vertical'
+                        }}
+                      ></textarea>
+                    </div>
+                    <button type="submit" className="btn btn-primary w-full" style={{ justifyContent: 'center' }}>
+                      Submit Feedback
+                    </button>
+                  </form>
+                </motion.div>
+              ) : (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <div className="modal-icon" style={{ background: 'var(--accent-primary)', color: 'var(--card-bg)' }}><CheckCircle size={28} /></div>
+                  <h3 style={{ fontSize: '1.5rem', marginBottom: '12px', fontWeight: '600' }}>Feedback Sent</h3>
+                  <p style={{ color: 'var(--text-secondary)', marginBottom: '32px', fontSize: '0.95rem' }}>
+                    Thank you for helping us improve! We value your input.
+                  </p>
                 </motion.div>
               )}
             </motion.div>
