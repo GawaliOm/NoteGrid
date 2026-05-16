@@ -20,7 +20,7 @@ export default function App() {
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [currentPdfUrl, setCurrentPdfUrl] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Modal & Auth State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [email, setEmail] = useState('');
@@ -89,7 +89,7 @@ export default function App() {
   const handleModalSubmit = async (e) => {
     e.preventDefault();
     setEmailError('');
-    
+
     if (!email) {
       setEmailError('Email is required');
       return;
@@ -100,7 +100,7 @@ export default function App() {
     }
 
     setIsSubmitting(true);
-    
+
     const { error } = await supabase.from('captured_emails').insert([
       { email: email, subject: selectedSubject?.title }
     ]);
@@ -173,7 +173,7 @@ export default function App() {
       setIsAdminAuthOpen(false);
       setActiveView('admin');
       fetchAdminData();
-      window.scrollTo(0,0);
+      window.scrollTo(0, 0);
     } else {
       setAdminError('Incorrect password');
     }
@@ -216,8 +216,8 @@ export default function App() {
   };
 
   const handleDeleteNote = async (subject) => {
-    if(!confirm("Are you sure you want to delete this note?")) return;
-    
+    if (!confirm("Are you sure you want to delete this note?")) return;
+
     // Extract file path from URL (simple version)
     const urlParts = subject.pdf_url.split('/');
     const fileName = urlParts[urlParts.length - 1];
@@ -225,7 +225,7 @@ export default function App() {
 
     await supabase.storage.from('pdfs').remove([filePath]);
     await supabase.from('notes').delete().eq('id', subject.id);
-    
+
     fetchNotes();
   };
 
@@ -237,22 +237,22 @@ export default function App() {
 
   // --------------- UI COMPONENTS ---------------
 
-  const filteredSubjects = subjects.filter(subject => 
+  const filteredSubjects = subjects.filter(subject =>
     subject.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <>
       <header className="navbar container">
-        <div className="logo" onClick={() => { setActiveView('subjects'); window.scrollTo(0,0); }} style={{cursor:'pointer'}}>
+        <div className="logo" onClick={() => { setActiveView('subjects'); window.scrollTo(0, 0); }} style={{ cursor: 'pointer' }}>
           <BookOpen size={28} />
           <span>NoteGrid</span>
         </div>
-        
+
         <div className="search-container">
-          <input 
-            type="text" 
-            placeholder="Search for notes..." 
+          <input
+            type="text"
+            placeholder="Search for notes..."
             className="search-input"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -260,18 +260,18 @@ export default function App() {
         </div>
 
         <div className="navbar-actions">
-          <button onClick={() => setIsRequestModalOpen(true)} className="btn btn-text" style={{fontSize:'0.875rem', gap:'4px'}}>
+          <button onClick={() => setIsRequestModalOpen(true)} className="btn btn-text" style={{ fontSize: '0.875rem', gap: '4px' }}>
             <MessageSquare size={16} /> Request
           </button>
-          <button onClick={openAdminLogin} className="btn btn-secondary" style={{display:'flex', alignItems:'center', gap:'8px', fontSize:'0.875rem', padding:'8px 16px'}}>
-            <Shield size={16} /> Admin Login
+          <button onClick={openAdminLogin} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', padding: '8px 16px' }}>
+            <Shield size={16} /> Admin
           </button>
         </div>
       </header>
 
-      <main className="container" style={{minHeight: '70vh'}}>
+      <main className="container" style={{ minHeight: '70vh' }}>
         <AnimatePresence mode="wait">
-          
+
           {/* ================= SUBJECTS VIEW ================= */}
           {activeView === 'subjects' && (
             <motion.section
@@ -287,7 +287,7 @@ export default function App() {
               </div>
 
               {filteredSubjects.length === 0 ? (
-                <div style={{textAlign:'center', padding:'40px', color:'var(--text-tertiary)', border:'1px dashed var(--card-border)', borderRadius:'var(--radius-md)'}}>
+                <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-tertiary)', border: '1px dashed var(--card-border)', borderRadius: 'var(--radius-md)' }}>
                   {searchTerm ? "No results found for your search." : "No notes available yet."}
                 </div>
               ) : (
@@ -301,13 +301,13 @@ export default function App() {
                       animate={{ opacity: 1, scale: 1 }}
                       transition={{ delay: idx * 0.05 }}
                     >
-                      <div className="card-cover" style={{background: '#fff', overflow: 'hidden', display:'flex', justifyContent:'center'}}>
-                        <Document file={subject.pdf_url} loading={<div style={{padding:'20px'}}>Loading Preview...</div>}>
+                      <div className="card-cover" style={{ background: '#fff', overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
+                        <Document file={subject.pdf_url} loading={<div style={{ padding: '20px' }}>Loading Preview...</div>}>
                           <Page pageNumber={1} width={300} renderTextLayer={false} renderAnnotationLayer={false} />
                         </Document>
                         <div className="card-overlay">
                           <FileText size={32} color="white" />
-                          <span style={{color:'white', marginTop:'8px', fontWeight:'500'}}>View Notes</span>
+                          <span style={{ color: 'white', marginTop: '8px', fontWeight: '500' }}>View Notes</span>
                         </div>
                       </div>
                       <h3 className="card-title">{subject.title}</h3>
@@ -342,31 +342,31 @@ export default function App() {
                   <span style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>Cloud-hosted PDF</span>
                 </div>
 
-                <div style={{ 
-                    display: 'flex', 
-                    overflowX: 'auto', 
-                    gap: '24px', 
-                    paddingBottom: '20px',
-                    WebkitOverflowScrolling: 'touch',
-                    scrollbarWidth: 'thin'
+                <div style={{
+                  display: 'flex',
+                  overflowX: 'auto',
+                  gap: '24px',
+                  paddingBottom: '20px',
+                  WebkitOverflowScrolling: 'touch',
+                  scrollbarWidth: 'thin'
                 }}>
                   <Document file={currentPdfUrl} loading="Loading Cloud PDF...">
                     {[1, 2, 3, 4].map((num) => (
-                      <motion.div 
-                        key={num} 
+                      <motion.div
+                        key={num}
                         className="preview-card"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: num * 0.1 }}
                         style={{ minWidth: '350px', flexShrink: 0 }}
                       >
-                        <div className="preview-inner" style={{display:'flex', justifyContent:'center', background:'#fff', overflow:'hidden'}}>
-                          <div className={num === 4 ? 'blur-layer' : ''} style={{width:'100%'}}>
-                            <Page 
-                              pageNumber={num} 
-                              width={350} 
-                              renderTextLayer={false} 
-                              renderAnnotationLayer={false} 
+                        <div className="preview-inner" style={{ display: 'flex', justifyContent: 'center', background: '#fff', overflow: 'hidden' }}>
+                          <div className={num === 4 ? 'blur-layer' : ''} style={{ width: '100%' }}>
+                            <Page
+                              pageNumber={num}
+                              width={350}
+                              renderTextLayer={false}
+                              renderAnnotationLayer={false}
                             />
                           </div>
                           <div className="page-num">{num}</div>
@@ -394,24 +394,24 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: '40px'}}>
-                <h1 style={{fontSize:'2rem', fontWeight:'700'}}>Admin Dashboard</h1>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '40px' }}>
+                <h1 style={{ fontSize: '2rem', fontWeight: '700' }}>Admin Dashboard</h1>
                 <button className="btn btn-secondary" onClick={() => setActiveView('subjects')}>Exit Admin</button>
               </div>
 
-              <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:'40px'}}>
-                
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
+
                 {/* Upload Section */}
-                <div style={{background:'var(--card-bg)', padding:'32px', borderRadius:'var(--radius-md)', border:'1px solid var(--card-border)'}}>
-                  <h2 style={{fontSize:'1.25rem', marginBottom:'24px', display:'flex', alignItems:'center', gap:'8px'}}><Plus size={20}/> Upload to Cloud</h2>
+                <div style={{ background: 'var(--card-bg)', padding: '32px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+                  <h2 style={{ fontSize: '1.25rem', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}><Plus size={20} /> Upload to Cloud</h2>
                   <form onSubmit={handleAddNote}>
-                    <div className="input-group" style={{marginTop:0}}>
-                      <label style={{display:'block', marginBottom:'8px', fontSize:'0.875rem', fontWeight:'500'}}>Subject Title</label>
+                    <div className="input-group" style={{ marginTop: 0 }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Subject Title</label>
                       <input type="text" name="title" required placeholder="e.g. Machine Learning Basics" />
                     </div>
                     <div className="input-group">
-                      <label style={{display:'block', marginBottom:'8px', fontSize:'0.875rem', fontWeight:'500'}}>PDF File</label>
-                      <input type="file" name="file" accept=".pdf" required style={{padding:'10px', background:'#fff'}} />
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>PDF File</label>
+                      <input type="file" name="file" accept=".pdf" required style={{ padding: '10px', background: '#fff' }} />
                     </div>
                     <button type="submit" className="btn btn-primary w-full" disabled={isUploading}>
                       {isUploading ? 'Uploading to Cloud...' : 'Upload & Publish'}
@@ -420,14 +420,14 @@ export default function App() {
                 </div>
 
                 {/* Manage Notes Section */}
-                <div style={{background:'var(--card-bg)', padding:'32px', borderRadius:'var(--radius-md)', border:'1px solid var(--card-border)', maxHeight:'400px', overflowY:'auto'}}>
-                  <h2 style={{fontSize:'1.25rem', marginBottom:'24px', display:'flex', alignItems:'center', gap:'8px'}}><FileText size={20}/> Cloud Library</h2>
-                  {subjects.length === 0 ? <p style={{color:'var(--text-tertiary)'}}>No notes uploaded yet.</p> : null}
-                  <div style={{display:'flex', flexDirection:'column', gap:'12px'}}>
+                <div style={{ background: 'var(--card-bg)', padding: '32px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)', maxHeight: '400px', overflowY: 'auto' }}>
+                  <h2 style={{ fontSize: '1.25rem', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}><FileText size={20} /> Cloud Library</h2>
+                  {subjects.length === 0 ? <p style={{ color: 'var(--text-tertiary)' }}>No notes uploaded yet.</p> : null}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {subjects.map(s => (
-                      <div key={s.id} style={{display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px', background:'#F5F5F5', borderRadius:'8px', border:'1px solid var(--card-border)'}}>
-                        <span style={{fontWeight:'500'}}>{s.title}</span>
-                        <button onClick={() => handleDeleteNote(s)} style={{color:'#EF4444', background:'none', border:'none', cursor:'pointer', padding:'4px'}}>
+                      <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#F5F5F5', borderRadius: '8px', border: '1px solid var(--card-border)' }}>
+                        <span style={{ fontWeight: '500' }}>{s.title}</span>
+                        <button onClick={() => handleDeleteNote(s)} style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
                           <Trash2 size={18} />
                         </button>
                       </div>
@@ -436,10 +436,10 @@ export default function App() {
                 </div>
 
                 {/* User Requests Section */}
-                <div style={{gridColumn:'1 / -1', background:'var(--card-bg)', padding:'32px', borderRadius:'var(--radius-md)', border:'1px solid var(--card-border)'}}>
-                  <h2 style={{fontSize:'1.25rem', marginBottom:'24px', display:'flex', alignItems:'center', gap:'8px'}}><MessageSquare size={20}/> User Requests</h2>
+                <div style={{ gridColumn: '1 / -1', background: 'var(--card-bg)', padding: '32px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+                  <h2 style={{ fontSize: '1.25rem', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}><MessageSquare size={20} /> User Requests</h2>
                   {userRequests.length === 0 ? (
-                    <p style={{color:'var(--text-tertiary)'}}>No requests yet.</p>
+                    <p style={{ color: 'var(--text-tertiary)' }}>No requests yet.</p>
                   ) : (
                     <table className="admin-table">
                       <thead>
@@ -452,10 +452,10 @@ export default function App() {
                       <tbody>
                         {userRequests.map((req, i) => (
                           <tr key={i}>
-                            <td style={{fontWeight:'500'}}>{req.title}</td>
-                            <td style={{color:'var(--text-tertiary)', fontSize:'0.875rem'}}>{new Date(req.created_at).toLocaleString()}</td>
+                            <td style={{ fontWeight: '500' }}>{req.title}</td>
+                            <td style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>{new Date(req.created_at).toLocaleString()}</td>
                             <td>
-                              <button onClick={() => handleDeleteRequest(req.id)} style={{color:'#EF4444', background:'none', border:'none', cursor:'pointer'}}>
+                              <button onClick={() => handleDeleteRequest(req.id)} style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer' }}>
                                 <Trash2 size={16} />
                               </button>
                             </td>
@@ -467,10 +467,10 @@ export default function App() {
                 </div>
 
                 {/* Collected Emails Section */}
-                <div style={{gridColumn:'1 / -1', background:'var(--card-bg)', padding:'32px', borderRadius:'var(--radius-md)', border:'1px solid var(--card-border)'}}>
-                  <h2 style={{fontSize:'1.25rem', marginBottom:'24px', display:'flex', alignItems:'center', gap:'8px'}}><Mail size={20}/> Captured Leads</h2>
+                <div style={{ gridColumn: '1 / -1', background: 'var(--card-bg)', padding: '32px', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+                  <h2 style={{ fontSize: '1.25rem', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}><Mail size={20} /> Captured Leads</h2>
                   {capturedEmails.length === 0 ? (
-                    <p style={{color:'var(--text-tertiary)'}}>No emails captured yet.</p>
+                    <p style={{ color: 'var(--text-tertiary)' }}>No emails captured yet.</p>
                   ) : (
                     <table className="admin-table">
                       <thead>
@@ -483,9 +483,9 @@ export default function App() {
                       <tbody>
                         {capturedEmails.map((entry, i) => (
                           <tr key={i}>
-                            <td style={{fontWeight:'500'}}>{entry.email}</td>
-                            <td style={{color:'var(--text-secondary)'}}>{entry.subject}</td>
-                            <td style={{color:'var(--text-tertiary)', fontSize:'0.875rem'}}>{new Date(entry.created_at).toLocaleString()}</td>
+                            <td style={{ fontWeight: '500' }}>{entry.email}</td>
+                            <td style={{ color: 'var(--text-secondary)' }}>{entry.subject}</td>
+                            <td style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>{new Date(entry.created_at).toLocaleString()}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -501,10 +501,10 @@ export default function App() {
       </main>
 
       {/* Subtle Footer */}
-      <footer className="container" style={{padding: '60px 24px', marginTop: '60px', borderTop: '1px solid var(--card-border)', display: 'flex', flexDirection:'column', gap:'12px', alignItems: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem'}}>
-        <div style={{display:'flex', gap:'20px'}}>
+      <footer className="container" style={{ padding: '60px 24px', marginTop: '60px', borderTop: '1px solid var(--card-border)', display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>
+        <div style={{ display: 'flex', gap: '20px' }}>
           <span>© 2026 NoteGrid</span>
-          <a href="mailto:gawali.om006@gmail.com" style={{color:'inherit', textDecoration:'none', display:'flex', alignItems:'center', gap:'4px'}}>
+          <a href="mailto:gawali.om006@gmail.com" style={{ color: 'inherit', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Mail size={14} /> gawali.om006@gmail.com
           </a>
         </div>
@@ -516,14 +516,14 @@ export default function App() {
       {/* Request Note Modal */}
       <AnimatePresence>
         {isRequestModalOpen && (
-          <motion.div 
+          <motion.div
             className="modal-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsRequestModalOpen(false)}
           >
-            <motion.div 
+            <motion.div
               className="modal-content"
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
@@ -541,10 +541,10 @@ export default function App() {
                   </p>
                   <form onSubmit={handleRequestSubmit}>
                     <div className="input-group">
-                      <input 
-                        type="text" 
-                        placeholder="e.g. Advanced AI, Chemistry..." 
-                        required 
+                      <input
+                        type="text"
+                        placeholder="e.g. Advanced AI, Chemistry..."
+                        required
                         value={requestTitle}
                         onChange={(e) => setRequestTitle(e.target.value)}
                       />
@@ -571,14 +571,14 @@ export default function App() {
       {/* PDF Download Auth Modal */}
       <AnimatePresence>
         {isModalOpen && (
-          <motion.div 
+          <motion.div
             className="modal-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={closeModal}
           >
-            <motion.div 
+            <motion.div
               className="modal-content"
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
@@ -596,11 +596,11 @@ export default function App() {
                   </p>
                   <form onSubmit={handleModalSubmit}>
                     <div className="input-group">
-                      <input 
-                        type="email" 
-                        placeholder="name@example.com" 
+                      <input
+                        type="email"
+                        placeholder="name@example.com"
                         value={email}
-                        onChange={(e) => { setEmail(e.target.value); if(emailError) setEmailError(''); }}
+                        onChange={(e) => { setEmail(e.target.value); if (emailError) setEmailError(''); }}
                         disabled={isSubmitting}
                         className={emailError ? 'error' : ''}
                       />
@@ -631,14 +631,14 @@ export default function App() {
       {/* Admin Login Modal */}
       <AnimatePresence>
         {isAdminAuthOpen && (
-          <motion.div 
+          <motion.div
             className="modal-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={closeAdminLogin}
           >
-            <motion.div 
+            <motion.div
               className="modal-content"
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
@@ -649,33 +649,33 @@ export default function App() {
 
               {authStep === 1 ? (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <div className="modal-icon" style={{borderRadius: '12px'}}><Shield size={28} /></div>
+                  <div className="modal-icon" style={{ borderRadius: '12px' }}><Shield size={28} /></div>
                   <h3 style={{ fontSize: '1.5rem', marginBottom: '12px', fontWeight: '600' }}>Admin Login</h3>
                   <p style={{ color: 'var(--text-secondary)', marginBottom: '32px', fontSize: '0.95rem' }}>Select your account to continue.</p>
-                  
-                  <button 
-                    style={{width:'100%', padding:'16px', background:'#FAFAFA', border:'1px solid var(--card-border)', borderRadius:'var(--radius-md)', display:'flex', alignItems:'center', gap:'16px', cursor:'pointer', transition:'all 0.2s'}}
+
+                  <button
+                    style={{ width: '100%', padding: '16px', background: '#FAFAFA', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', transition: 'all 0.2s' }}
                     onMouseOver={(e) => e.currentTarget.style.borderColor = '#A3A3A3'}
                     onMouseOut={(e) => e.currentTarget.style.borderColor = 'var(--card-border)'}
                     onClick={() => setAuthStep(2)}
                   >
-                    <div style={{background:'#E5E5E5', padding:'12px', borderRadius:'50%'}}><User size={24} color="#525252" /></div>
-                    <div style={{textAlign:'left'}}>
-                      <div style={{fontWeight:'600', fontSize:'1.125rem'}}>Om Gawali</div>
-                      <div style={{fontSize:'0.875rem', color:'var(--text-secondary)'}}>System Administrator</div>
+                    <div style={{ background: '#E5E5E5', padding: '12px', borderRadius: '50%' }}><User size={24} color="#525252" /></div>
+                    <div style={{ textAlign: 'left' }}>
+                      <div style={{ fontWeight: '600', fontSize: '1.125rem' }}>Om Gawali</div>
+                      <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>System Administrator</div>
                     </div>
                   </button>
                 </motion.div>
               ) : (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                  <div className="modal-icon" style={{borderRadius: '12px'}}><Lock size={28} /></div>
+                  <div className="modal-icon" style={{ borderRadius: '12px' }}><Lock size={28} /></div>
                   <h3 style={{ fontSize: '1.5rem', marginBottom: '12px', fontWeight: '600' }}>Enter Password</h3>
                   <p style={{ color: 'var(--text-secondary)', marginBottom: '32px', fontSize: '0.95rem' }}>Verify your identity for Om Gawali.</p>
                   <form onSubmit={handleAdminAuth}>
                     <div className="input-group">
-                      <input 
-                        type="password" 
-                        placeholder="••••••••" 
+                      <input
+                        type="password"
+                        placeholder="••••••••"
                         value={adminPassword}
                         onChange={(e) => { setAdminPassword(e.target.value); setAdminError(''); }}
                         className={adminError ? 'error' : ''}
