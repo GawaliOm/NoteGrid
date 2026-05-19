@@ -14,6 +14,17 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Normalization function for class names
+const normalizeClassName = (clsName) => {
+  if (!clsName) return 'General';
+  let normalized = clsName.trim().toUpperCase().replace(/\./g, '');
+  const clean = normalized.replace(/\s+/g, '');
+  if (clean.includes('SYBCA')) return 'SYBCA';
+  if (clean.includes('FYBCA')) return 'FYBCA';
+  if (clean.includes('TYBCA')) return 'TYBCA';
+  return normalized.replace(/\s+/g, ' ');
+};
+
 export default function App() {
   const [activeView, setActiveView] = useState('subjects'); // subjects | preview | admin
   const [subjects, setSubjects] = useState([]);
@@ -81,13 +92,52 @@ export default function App() {
     const { data: uploads, error: uploadsError } = await supabase.from('user_uploads').select('*');
 
     if (!notesError && !uploadsError) {
-      const formattedNotes = notes.map(n => ({ ...n, type: 'admin' }));
-      const formattedUploads = uploads.map(u => ({
-        ...u,
-        title: u.subject ? `${u.subject} Notes` : 'Student Notes',
-        author: u.name,
-        type: 'user'
-      }));
+      const formattedNotes = notes.map(n => {
+        let displaySubject = n.subject || '';
+        let displayType = 'Notes'; // default fallback
+        
+        if (n.subject) {
+          const match = n.subject.match(/^(.*?)\s*\((.*?)\)$/);
+          if (match) {
+            displaySubject = match[1];
+            displayType = match[2];
+          }
+        }
+        
+        return {
+          ...n,
+          subject: displaySubject,
+          material_type: displayType,
+          type: 'admin'
+        };
+      });
+
+      const formattedUploads = uploads.map(u => {
+        let title = u.subject || 'Student Contribution';
+        let displaySubject = u.subject || '';
+        let displayType = 'Notes'; // default fallback
+        
+        if (u.subject) {
+          const match = u.subject.match(/^(.*?)\s*\((.*?)\)$/);
+          if (match) {
+            displaySubject = match[1];
+            displayType = match[2];
+            title = `${displaySubject} ${displayType}`; // e.g. "Java Project" or "Maths Exam Material"
+          } else {
+            // Legacy/fallback without parentheses: use the subject column value directly as title
+            title = u.subject;
+          }
+        }
+        
+        return {
+          ...u,
+          title: title,
+          subject: displaySubject,
+          material_type: displayType,
+          author: u.name,
+          type: 'user'
+        };
+      });
 
       const allNotes = [...formattedNotes, ...formattedUploads].sort((a, b) =>
         new Date(b.created_at) - new Date(a.created_at)
@@ -228,6 +278,9 @@ export default function App() {
   const handleAddNote = async (e) => {
     e.preventDefault();
     const title = e.target.title.value;
+    const studentClass = e.target.studentClass.value;
+    const subject = e.target.subject.value;
+    const materialType = e.target.materialType.value;
     const file = e.target.file.files[0];
 
     if (!file || !title) return;
@@ -245,9 +298,15 @@ export default function App() {
       // Get public URL
       const { data: { publicUrl } } = supabase.storage.from('pdfs').getPublicUrl(filePath);
 
+      // Normalize class name
+      const normalizedClass = studentClass ? normalizeClassName(studentClass) : null;
+
+      // Combine subject and material type
+      const combinedSubject = subject ? `${subject} (${materialType})` : `General (${materialType})`;
+
       // Insert metadata into table
       const { error: insertError } = await supabase.from('notes').insert([
-        { title: title, pdf_url: publicUrl }
+        { title: title, pdf_url: publicUrl, student_class: normalizedClass, subject: combinedSubject }
       ]);
       if (insertError) throw insertError;
 
@@ -285,9 +344,10 @@ export default function App() {
     const name = e.target.name.value;
     const studentClass = e.target.studentClass.value;
     const subject = e.target.subject.value;
+    const materialType = e.target.materialType.value;
     const file = e.target.file.files[0];
 
-    if (!file || !name || !studentClass || !subject) return;
+    if (!file || !name || !studentClass || !subject || !materialType) return;
 
     setIsUploading(true);
     try {
@@ -302,9 +362,15 @@ export default function App() {
       // Get public URL
       const { data: { publicUrl } } = supabase.storage.from('pdfs').getPublicUrl(filePath);
 
+      // Normalize class name
+      const normalizedClass = studentClass ? normalizeClassName(studentClass) : null;
+
+      // Combine subject and material type
+      const combinedSubject = `${subject} (${materialType})`;
+
       // Insert metadata into table
       const { error: insertError } = await supabase.from('user_uploads').insert([
-        { name, student_class: studentClass, subject, pdf_url: publicUrl }
+        { name, student_class: normalizedClass, subject: combinedSubject, pdf_url: publicUrl }
       ]);
       if (insertError) throw insertError;
 
@@ -367,6 +433,32 @@ export default function App() {
     subject.title.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Group notes by normalized class name
+  const groupedSubjects = {};
+  filteredSubjects.forEach(subject => {
+    const cls = normalizeClassName(subject.student_class);
+    if (!groupedSubjects[cls]) {
+      groupedSubjects[cls] = [];
+    }
+    groupedSubjects[cls].push(subject);
+  });
+
+  // Predefined sorting order
+  const classOrder = ['FYBCA', 'SYBCA', 'TYBCA', 'BCA', 'GENERAL'];
+  const sortedClassNames = Object.keys(groupedSubjects).sort((a, b) => {
+    const orderA = classOrder.indexOf(a.toUpperCase());
+    const orderB = classOrder.indexOf(b.toUpperCase());
+    
+    if (orderA !== -1 && orderB !== -1) return orderA - orderB;
+    if (orderA !== -1) return -1;
+    if (orderB !== -1) return 1;
+    
+    if (a === 'General') return 1;
+    if (b === 'General') return -1;
+    
+    return a.localeCompare(b);
+  });
+
   return (
     <>
       <header className="navbar container">
@@ -428,39 +520,85 @@ export default function App() {
                   {searchTerm ? "No results found for your search." : "No notes available yet."}
                 </div>
               ) : (
-                <div className="grid-container">
-                  {filteredSubjects.map((subject, idx) => (
-                    <motion.div
-                      key={subject.id}
-                      className="card"
-                      onClick={() => handleSubjectClick(subject)}
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: idx * 0.05 }}
-                    >
-                      <div className="card-cover" style={{ background: '#fff', overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
-                        <Document file={subject.pdf_url} loading={<div style={{ padding: '20px' }}>Loading Preview...</div>}>
-                          <Page pageNumber={1} width={300} renderTextLayer={false} renderAnnotationLayer={false} />
-                        </Document>
-                        <div className="card-overlay">
-                          <FileText size={32} color="white" />
-                          <span style={{ color: 'white', marginTop: '8px', fontWeight: '500' }}>View Notes</span>
-                        </div>
+                <div style={{ paddingBottom: '120px' }}>
+                  {sortedClassNames.map((className) => (
+                    <div key={className} className="class-section" style={{ marginBottom: '48px' }}>
+                      <h2 className="class-section-title" style={{ fontSize: '1.5rem', fontWeight: '700', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px', color: 'var(--text-primary)' }}>
+                        {className}
+                        <span style={{ fontSize: '0.875rem', fontWeight: '500', color: 'var(--text-secondary)', background: 'var(--input-bg)', padding: '2px 8px', borderRadius: '12px' }}>
+                          {groupedSubjects[className].length} {groupedSubjects[className].length === 1 ? 'material' : 'materials'}
+                        </span>
+                      </h2>
+                      <div className="grid-container" style={{ margin: 0, paddingBottom: 0 }}>
+                        {groupedSubjects[className].map((subject, idx) => (
+                          <motion.div
+                            key={subject.id}
+                            className="card"
+                            onClick={() => handleSubjectClick(subject)}
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: idx * 0.05 }}
+                          >
+                            <div className="card-cover" style={{ background: '#fff', overflow: 'hidden', display: 'flex', justifyContent: 'center' }}>
+                              <Document file={subject.pdf_url} loading={<div style={{ padding: '20px' }}>Loading Preview...</div>}>
+                                <Page pageNumber={1} width={400} renderTextLayer={false} renderAnnotationLayer={false} />
+                              </Document>
+                              <div className="card-overlay">
+                                <FileText size={32} color="white" />
+                                <span style={{ color: 'white', marginTop: '8px', fontWeight: '500' }}>View Notes</span>
+                              </div>
+                            </div>
+                            <div className="card-content">
+                              <h3 className="card-title">{subject.title}</h3>
+                              <div className="card-metadata">
+                                {subject.author && <span className="card-author">by {subject.author}</span>}
+                                <div className="card-tags">
+                                  {subject.student_class && <span className="card-tag">{subject.student_class}</span>}
+                                  {subject.subject && <span className="card-tag">{subject.subject}</span>}
+                                  {subject.material_type && (
+                                    <span 
+                                      className="card-tag" 
+                                      style={{ 
+                                        border: '1px solid var(--card-border)', 
+                                        background: 'rgba(255,255,255,0.06)',
+                                        opacity: 0.9 
+                                      }}
+                                    >
+                                      {subject.material_type}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
                       </div>
-                      <div className="card-content">
-                        <h3 className="card-title">{subject.title}</h3>
-                        <div className="card-metadata">
-                          {subject.author && <span className="card-author">by {subject.author}</span>}
-                          <div className="card-tags">
-                            {subject.student_class && <span className="card-tag">{subject.student_class}</span>}
-                            {subject.subject && <span className="card-tag">{subject.subject}</span>}
-                          </div>
-                        </div>
-                      </div>
-                    </motion.div>
+                    </div>
                   ))}
                 </div>
               )}
+
+              {/* Call to Action Section */}
+              <div className="cta-section">
+                <div className="cta-card">
+                  <div>
+                    <h3>Contribute Material</h3>
+                    <p>Have high-quality study materials, exam notes, or solutions? Share them with fellow students to make education more accessible for everyone.</p>
+                  </div>
+                  <button className="btn btn-primary" onClick={() => setIsUploadModalOpen(true)}>
+                    <UploadCloud size={18} /> Upload Notes
+                  </button>
+                </div>
+                <div className="cta-card">
+                  <div>
+                    <h3>Give Feedback</h3>
+                    <p>Have an idea to improve NoteGrid, spotted a bug, or want a new feature? We'd love to hear your suggestions and feedback.</p>
+                  </div>
+                  <button className="btn btn-secondary" onClick={() => setIsFeedbackModalOpen(true)}>
+                    <MessageSquare size={18} /> Share Feedback
+                  </button>
+                </div>
+              </div>
             </motion.section>
           )}
 
@@ -556,8 +694,26 @@ export default function App() {
                       <input type="text" name="title" required placeholder="e.g. Machine Learning Basics" />
                     </div>
                     <div className="input-group">
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Class / Grade</label>
+                      <input type="text" name="studentClass" placeholder="e.g. SYBCA (Leave blank for General)" />
+                    </div>
+                    <div className="input-group">
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Subject</label>
+                      <input type="text" name="subject" placeholder="e.g. Java, Python (Optional)" />
+                    </div>
+                    <div className="input-group">
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Material Type</label>
+                      <select name="materialType" required style={{ width: '100%', padding: '14px 16px', background: 'var(--input-bg)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }}>
+                        <option value="Notes">Notes</option>
+                        <option value="Project">Project</option>
+                        <option value="Exam Material">Exam Material</option>
+                        <option value="Syllabus">Syllabus</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                    <div className="input-group">
                       <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>PDF File</label>
-                      <input type="file" name="file" accept=".pdf" required style={{ padding: '10px', background: '#fff' }} />
+                      <input type="file" name="file" accept=".pdf" required style={{ padding: '10px' }} />
                     </div>
                     <button type="submit" className="btn btn-primary w-full" disabled={isUploading}>
                       {isUploading ? 'Uploading to Cloud...' : 'Upload & Publish'}
@@ -909,6 +1065,16 @@ export default function App() {
                         placeholder="e.g. Mathematics, Physics..."
                         required
                       />
+                    </div>
+                    <div className="input-group" style={{ textAlign: 'left' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Material Type</label>
+                      <select name="materialType" required style={{ width: '100%', padding: '14px 16px', background: 'var(--input-bg)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }}>
+                        <option value="Notes">Notes</option>
+                        <option value="Project">Project</option>
+                        <option value="Exam Material">Exam Material</option>
+                        <option value="Syllabus">Syllabus</option>
+                        <option value="Other">Other</option>
+                      </select>
                     </div>
                     <div className="input-group" style={{ textAlign: 'left' }}>
                       <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>PDF Material</label>
