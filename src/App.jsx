@@ -18,11 +18,29 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 const normalizeClassName = (clsName) => {
   if (!clsName) return 'General';
   let normalized = clsName.trim().toUpperCase().replace(/\./g, '');
-  const clean = normalized.replace(/\s+/g, '');
-  if (clean.includes('SYBCA')) return 'SYBCA';
-  if (clean.includes('FYBCA')) return 'FYBCA';
-  if (clean.includes('TYBCA')) return 'TYBCA';
-  return normalized.replace(/\s+/g, ' ');
+  const clean = normalized.replace(/\s+/g, ' ');
+  
+  let baseClass = '';
+  if (clean.includes('FYBCA')) baseClass = 'FYBCA';
+  else if (clean.includes('SYBCA')) baseClass = 'SYBCA';
+  else if (clean.includes('TYBCA')) baseClass = 'TYBCA';
+  else if (clean.includes('BCA')) baseClass = 'BCA';
+  
+  if (baseClass) {
+    const semMatch = clean.match(/SEM(?:ESTER)?\s*([1-6])/i);
+    if (semMatch) {
+      return `${baseClass} Sem ${semMatch[1]}`;
+    }
+    return baseClass;
+  }
+  
+  const semMatch = clean.match(/SEM(?:ESTER)?\s*([1-6])/i);
+  if (semMatch) {
+    const mainClass = clean.replace(/SEM(?:ESTER)?\s*[1-6]/i, '').trim().replace(/\s+/g, ' ');
+    return `${mainClass || 'General'} Sem ${semMatch[1]}`;
+  }
+  
+  return clean;
 };
 
 export default function App() {
@@ -70,6 +88,12 @@ export default function App() {
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isFeedbackSuccess, setIsFeedbackSuccess] = useState(false);
   const [userFeedback, setUserFeedback] = useState([]);
+
+  // Form Selector States
+  const [adminClassSelect, setAdminClassSelect] = useState('SYBCA');
+  const [adminSemesterSelect, setAdminSemesterSelect] = useState('Sem 3');
+  const [userClassSelect, setUserClassSelect] = useState('SYBCA');
+  const [userSemesterSelect, setUserSemesterSelect] = useState('Sem 3');
 
   // Load Data on Mount
   useEffect(() => {
@@ -278,7 +302,16 @@ export default function App() {
   const handleAddNote = async (e) => {
     e.preventDefault();
     const title = e.target.title.value;
-    const studentClass = e.target.studentClass.value;
+    
+    const classSelect = e.target.studentClassSelect.value;
+    const customClass = e.target.customClass ? e.target.customClass.value : '';
+    const semesterSelect = e.target.semesterSelect.value;
+    
+    let studentClass = classSelect === 'Other' ? customClass : classSelect;
+    if (studentClass && semesterSelect !== 'N/A') {
+      studentClass = `${studentClass} ${semesterSelect}`;
+    }
+    
     const subject = e.target.subject.value;
     const materialType = e.target.materialType.value;
     const file = e.target.file.files[0];
@@ -312,6 +345,8 @@ export default function App() {
 
       fetchNotes();
       e.target.reset();
+      setAdminClassSelect('SYBCA');
+      setAdminSemesterSelect('Sem 3');
     } catch (err) {
       console.error(err);
       alert("Failed to upload PDF: " + err.message);
@@ -342,7 +377,16 @@ export default function App() {
   const handleUserUpload = async (e) => {
     e.preventDefault();
     const name = e.target.name.value;
-    const studentClass = e.target.studentClass.value;
+    
+    const classSelect = e.target.studentClassSelect.value;
+    const customClass = e.target.customClass ? e.target.customClass.value : '';
+    const semesterSelect = e.target.semesterSelect.value;
+    
+    let studentClass = classSelect === 'Other' ? customClass : classSelect;
+    if (studentClass && semesterSelect !== 'N/A') {
+      studentClass = `${studentClass} ${semesterSelect}`;
+    }
+    
     const subject = e.target.subject.value;
     const materialType = e.target.materialType.value;
     const file = e.target.file.files[0];
@@ -381,6 +425,8 @@ export default function App() {
         setIsUploadSuccess(false);
       }, 2000);
       e.target.reset();
+      setUserClassSelect('SYBCA');
+      setUserSemesterSelect('Sem 3');
     } catch (err) {
       console.error(err);
       alert("Failed to upload material: " + err.message);
@@ -443,18 +489,41 @@ export default function App() {
     groupedSubjects[cls].push(subject);
   });
 
-  // Predefined sorting order
+  // Predefined sorting order by base class and semester
   const classOrder = ['FYBCA', 'SYBCA', 'TYBCA', 'BCA', 'GENERAL'];
-  const sortedClassNames = Object.keys(groupedSubjects).sort((a, b) => {
-    const orderA = classOrder.indexOf(a.toUpperCase());
-    const orderB = classOrder.indexOf(b.toUpperCase());
+  
+  const getClassAndSem = (name) => {
+    const upper = name.toUpperCase();
+    let base = 'GENERAL';
+    if (upper.includes('FYBCA')) base = 'FYBCA';
+    else if (upper.includes('SYBCA')) base = 'SYBCA';
+    else if (upper.includes('TYBCA')) base = 'TYBCA';
+    else if (upper.includes('BCA')) base = 'BCA';
+    else if (upper.includes('GENERAL')) base = 'GENERAL';
+    else base = name; // For custom other classes
     
-    if (orderA !== -1 && orderB !== -1) return orderA - orderB;
+    const semMatch = upper.match(/SEM(?:ESTER)?\s*([1-6])/i);
+    const sem = semMatch ? parseInt(semMatch[1], 10) : 0;
+    
+    return { base, sem };
+  };
+
+  const sortedClassNames = Object.keys(groupedSubjects).sort((a, b) => {
+    const infoA = getClassAndSem(a);
+    const infoB = getClassAndSem(b);
+    
+    const orderA = classOrder.indexOf(infoA.base);
+    const orderB = classOrder.indexOf(infoB.base);
+    
+    if (orderA !== -1 && orderB !== -1) {
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+      return infoA.sem - infoB.sem;
+    }
+    
     if (orderA !== -1) return -1;
     if (orderB !== -1) return 1;
-    
-    if (a === 'General') return 1;
-    if (b === 'General') return -1;
     
     return a.localeCompare(b);
   });
@@ -694,8 +763,48 @@ export default function App() {
                       <input type="text" name="title" required placeholder="e.g. Machine Learning Basics" />
                     </div>
                     <div className="input-group">
-                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Class / Grade</label>
-                      <input type="text" name="studentClass" placeholder="e.g. SYBCA (Leave blank for General)" />
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Class & Semester</label>
+                      <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                        <select 
+                          name="studentClassSelect" 
+                          value={adminClassSelect}
+                          onChange={(e) => setAdminClassSelect(e.target.value)}
+                          required 
+                          style={{ flex: 1, padding: '14px 16px', background: 'var(--input-bg)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }}
+                        >
+                          <option value="FYBCA">FYBCA</option>
+                          <option value="SYBCA">SYBCA</option>
+                          <option value="TYBCA">TYBCA</option>
+                          <option value="BCA">BCA</option>
+                          <option value="General">General</option>
+                          <option value="Other">Other</option>
+                        </select>
+                        
+                        <select 
+                          name="semesterSelect" 
+                          value={adminSemesterSelect}
+                          onChange={(e) => setAdminSemesterSelect(e.target.value)}
+                          required 
+                          style={{ flex: 1, padding: '14px 16px', background: 'var(--input-bg)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }}
+                        >
+                          <option value="N/A">N/A</option>
+                          <option value="Sem 1">Sem 1</option>
+                          <option value="Sem 2">Sem 2</option>
+                          <option value="Sem 3">Sem 3</option>
+                          <option value="Sem 4">Sem 4</option>
+                          <option value="Sem 5">Sem 5</option>
+                          <option value="Sem 6">Sem 6</option>
+                        </select>
+                      </div>
+                      {adminClassSelect === 'Other' && (
+                        <input 
+                          type="text" 
+                          name="customClass" 
+                          placeholder="Enter custom class name (e.g. B.Tech CS)" 
+                          required 
+                          style={{ width: '100%' }}
+                        />
+                      )}
                     </div>
                     <div className="input-group">
                       <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Subject</label>
@@ -1049,13 +1158,48 @@ export default function App() {
                       />
                     </div>
                     <div className="input-group" style={{ textAlign: 'left' }}>
-                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Class / Grade</label>
-                      <input
-                        type="text"
-                        name="studentClass"
-                        placeholder="e.g. 10th Standard, B.Tech CS"
-                        required
-                      />
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Class & Semester</label>
+                      <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                        <select 
+                          name="studentClassSelect" 
+                          value={userClassSelect}
+                          onChange={(e) => setUserClassSelect(e.target.value)}
+                          required 
+                          style={{ flex: 1, padding: '14px 16px', background: 'var(--input-bg)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }}
+                        >
+                          <option value="FYBCA">FYBCA</option>
+                          <option value="SYBCA">SYBCA</option>
+                          <option value="TYBCA">TYBCA</option>
+                          <option value="BCA">BCA</option>
+                          <option value="General">General</option>
+                          <option value="Other">Other</option>
+                        </select>
+                        
+                        <select 
+                          name="semesterSelect" 
+                          value={userSemesterSelect}
+                          onChange={(e) => setUserSemesterSelect(e.target.value)}
+                          required 
+                          style={{ flex: 1, padding: '14px 16px', background: 'var(--input-bg)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }}
+                        >
+                          <option value="N/A">N/A</option>
+                          <option value="Sem 1">Sem 1</option>
+                          <option value="Sem 2">Sem 2</option>
+                          <option value="Sem 3">Sem 3</option>
+                          <option value="Sem 4">Sem 4</option>
+                          <option value="Sem 5">Sem 5</option>
+                          <option value="Sem 6">Sem 6</option>
+                        </select>
+                      </div>
+                      {userClassSelect === 'Other' && (
+                        <input 
+                          type="text" 
+                          name="customClass" 
+                          placeholder="Enter custom class name (e.g. B.Tech CS)" 
+                          required 
+                          style={{ width: '100%' }}
+                        />
+                      )}
                     </div>
                     <div className="input-group" style={{ textAlign: 'left' }}>
                       <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Subject</label>
