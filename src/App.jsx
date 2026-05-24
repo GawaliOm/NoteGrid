@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, FileText, X, ArrowLeft, Lock, Download, CheckCircle, Shield, User, Trash2, Plus, Mail, Search, MessageSquare, Moon, Sun, UploadCloud } from 'lucide-react';
+import { BookOpen, FileText, X, ArrowLeft, Lock, Download, CheckCircle, Shield, User, Trash2, Plus, Mail, Search, MessageSquare, Moon, Sun, UploadCloud, Edit } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -19,13 +19,13 @@ const normalizeClassName = (clsName) => {
   if (!clsName) return 'General';
   let normalized = clsName.trim().toUpperCase().replace(/\./g, '');
   const clean = normalized.replace(/\s+/g, ' ');
-  
+
   let baseClass = '';
   if (clean.includes('FYBCA')) baseClass = 'FYBCA';
   else if (clean.includes('SYBCA')) baseClass = 'SYBCA';
   else if (clean.includes('TYBCA')) baseClass = 'TYBCA';
   else if (clean.includes('BCA')) baseClass = 'BCA';
-  
+
   if (baseClass) {
     const semMatch = clean.match(/SEM(?:ESTER)?\s*([1-6])/i);
     if (semMatch) {
@@ -33,14 +33,47 @@ const normalizeClassName = (clsName) => {
     }
     return baseClass;
   }
-  
+
   const semMatch = clean.match(/SEM(?:ESTER)?\s*([1-6])/i);
   if (semMatch) {
     const mainClass = clean.replace(/SEM(?:ESTER)?\s*[1-6]/i, '').trim().replace(/\s+/g, ' ');
     return `${mainClass || 'General'} Sem ${semMatch[1]}`;
   }
-  
+
   return clean;
+};
+
+// Parser function for class and semester
+const parseClassAndSem = (cls) => {
+  if (!cls) return { base: 'General', sem: 'N/A', custom: '' };
+  const upper = cls.toUpperCase();
+  let base = '';
+  if (upper.includes('FYBCA')) base = 'FYBCA';
+  else if (upper.includes('SYBCA')) base = 'SYBCA';
+  else if (upper.includes('TYBCA')) base = 'TYBCA';
+  else if (upper.includes('BCA')) base = 'BCA';
+  else if (upper.includes('GENERAL')) base = 'General';
+
+  const semMatch = cls.match(/Sem\s*([1-6])/i);
+  const sem = semMatch ? `Sem ${semMatch[1]}` : 'N/A';
+
+  if (base) {
+    return { base, sem, custom: '' };
+  } else {
+    // Custom class
+    const mainClass = cls.replace(/Sem\s*[1-6]/i, '').trim();
+    return { base: 'Other', sem, custom: mainClass };
+  }
+};
+
+// Parser function for subject and material type
+const parseSubjectAndType = (subj) => {
+  if (!subj) return { subject: '', materialType: 'Notes' };
+  const match = subj.match(/^(.*?)\s*\((.*?)\)$/);
+  if (match) {
+    return { subject: match[1], materialType: match[2] };
+  }
+  return { subject: subj, materialType: 'Notes' };
 };
 
 export default function App() {
@@ -52,10 +85,21 @@ export default function App() {
 
   // Modal & Auth State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [email, setEmail] = useState('');
+  const [downloadName, setDownloadName] = useState('');
+  const [downloadFeedback, setDownloadFeedback] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [emailError, setEmailError] = useState('');
+  const [downloadError, setDownloadError] = useState('');
+
+  // Edit Contribution State
+  const [editingContribution, setEditingContribution] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editClassSelect, setEditClassSelect] = useState('SYBCA');
+  const [editSemesterSelect, setEditSemesterSelect] = useState('Sem 3');
+  const [editCustomClass, setEditCustomClass] = useState('');
+  const [editSubject, setEditSubject] = useState('');
+  const [editMaterialType, setEditMaterialType] = useState('Notes');
+  const [isEditSaving, setIsEditSaving] = useState(false);
 
   // Request Modal State
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
@@ -119,7 +163,7 @@ export default function App() {
       const formattedNotes = notes.map(n => {
         let displaySubject = n.subject || '';
         let displayType = 'Notes'; // default fallback
-        
+
         if (n.subject) {
           const match = n.subject.match(/^(.*?)\s*\((.*?)\)$/);
           if (match) {
@@ -127,7 +171,7 @@ export default function App() {
             displayType = match[2];
           }
         }
-        
+
         return {
           ...n,
           subject: displaySubject,
@@ -140,7 +184,7 @@ export default function App() {
         let title = u.subject || 'Student Contribution';
         let displaySubject = u.subject || '';
         let displayType = 'Notes'; // default fallback
-        
+
         if (u.subject) {
           const match = u.subject.match(/^(.*?)\s*\((.*?)\)$/);
           if (match) {
@@ -152,7 +196,7 @@ export default function App() {
             title = u.subject;
           }
         }
-        
+
         return {
           ...u,
           title: title,
@@ -198,59 +242,71 @@ export default function App() {
 
   // --------------- DOWNLOAD LOGIC ---------------
 
-  const validateEmail = (email) => {
-    return String(email)
-      .toLowerCase()
-      .match(
-        /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|.(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
-      );
-  };
-
   const handleModalSubmit = async (e) => {
     e.preventDefault();
-    setEmailError('');
+    setDownloadError('');
 
-    if (!email) {
-      setEmailError('Email is required');
-      return;
-    }
-    if (!validateEmail(email)) {
-      setEmailError('Please enter a valid email address');
+    if (!downloadName.trim()) {
+      setDownloadError('Name is required');
       return;
     }
 
     setIsSubmitting(true);
 
-    const { error } = await supabase.from('captured_emails').insert([
-      { email: email, subject: selectedSubject?.title }
+    const cleanFeedback = downloadFeedback.trim();
+    const feedbackSuggestion = cleanFeedback
+      ? `${cleanFeedback} (Downloaded note: ${selectedSubject?.title || 'Unknown'})`
+      : `(No comment left) (Downloaded note: ${selectedSubject?.title || 'Unknown'})`;
+
+    const { error } = await supabase.from('feedback').insert([
+      { name: downloadName.trim(), suggestion: feedbackSuggestion }
     ]);
 
     if (!error) {
       setIsSubmitting(false);
       setIsSuccess(true);
+      // Trigger download immediately
+      handleDownload();
     } else {
       setIsSubmitting(false);
-      alert("Error saving email. Please try again.");
+      alert("Error saving feedback. Please try again.");
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!currentPdfUrl) return;
-    const a = document.createElement('a');
-    a.href = currentPdfUrl;
-    a.download = `${selectedSubject.title}.pdf`;
-    a.target = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    try {
+      const response = await fetch(currentPdfUrl);
+      if (!response.ok) throw new Error('Network response was not ok');
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${selectedSubject?.title || 'document'}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Direct download failed, opening in a new tab instead:', error);
+      const a = document.createElement('a');
+      a.href = currentPdfUrl;
+      a.download = `${selectedSubject?.title || 'document'}.pdf`;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
   };
 
   const closeModal = () => {
     setIsModalOpen(false);
     setTimeout(() => {
       setIsSuccess(false);
-      setEmail('');
-      setEmailError('');
+      setDownloadName('');
+      setDownloadFeedback('');
+      setDownloadError('');
     }, 300);
   };
 
@@ -302,16 +358,16 @@ export default function App() {
   const handleAddNote = async (e) => {
     e.preventDefault();
     const title = e.target.title.value;
-    
+
     const classSelect = e.target.studentClassSelect.value;
     const customClass = e.target.customClass ? e.target.customClass.value : '';
     const semesterSelect = e.target.semesterSelect.value;
-    
+
     let studentClass = classSelect === 'Other' ? customClass : classSelect;
     if (studentClass && semesterSelect !== 'N/A') {
       studentClass = `${studentClass} ${semesterSelect}`;
     }
-    
+
     const subject = e.target.subject.value;
     const materialType = e.target.materialType.value;
     const file = e.target.file.files[0];
@@ -377,16 +433,16 @@ export default function App() {
   const handleUserUpload = async (e) => {
     e.preventDefault();
     const name = e.target.name.value;
-    
+
     const classSelect = e.target.studentClassSelect.value;
     const customClass = e.target.customClass ? e.target.customClass.value : '';
     const semesterSelect = e.target.semesterSelect.value;
-    
+
     let studentClass = classSelect === 'Other' ? customClass : classSelect;
     if (studentClass && semesterSelect !== 'N/A') {
       studentClass = `${studentClass} ${semesterSelect}`;
     }
-    
+
     const subject = e.target.subject.value;
     const materialType = e.target.materialType.value;
     const file = e.target.file.files[0];
@@ -448,6 +504,53 @@ export default function App() {
     fetchAdminData();
   };
 
+  const handleEditContributionClick = (con) => {
+    setEditingContribution(con);
+    setEditName(con.name || '');
+
+    const classInfo = parseClassAndSem(con.student_class);
+    setEditClassSelect(classInfo.base);
+    setEditSemesterSelect(classInfo.sem);
+    setEditCustomClass(classInfo.custom);
+
+    const subjectInfo = parseSubjectAndType(con.subject);
+    setEditSubject(subjectInfo.subject);
+    setEditMaterialType(subjectInfo.materialType);
+  };
+
+  const handleEditContributionSubmit = async (e) => {
+    e.preventDefault();
+    if (!editingContribution) return;
+
+    setIsEditSaving(true);
+
+    let studentClass = editClassSelect === 'Other' ? editCustomClass : editClassSelect;
+    if (studentClass && editSemesterSelect !== 'N/A') {
+      studentClass = `${studentClass} ${editSemesterSelect}`;
+    }
+
+    const normalizedClass = studentClass ? normalizeClassName(studentClass) : null;
+    const combinedSubject = `${editSubject} (${editMaterialType})`;
+
+    const { error } = await supabase
+      .from('user_uploads')
+      .update({
+        name: editName,
+        student_class: normalizedClass,
+        subject: combinedSubject
+      })
+      .eq('id', editingContribution.id);
+
+    if (!error) {
+      setEditingContribution(null);
+      fetchNotes(); // Refresh public view
+      fetchAdminData(); // Refresh admin views
+    } else {
+      alert("Failed to save changes: " + error.message);
+    }
+    setIsEditSaving(false);
+  };
+
   const handleFeedbackSubmit = async (e) => {
     e.preventDefault();
     const name = e.target.name.value;
@@ -491,7 +594,7 @@ export default function App() {
 
   // Predefined sorting order by base class and semester
   const classOrder = ['FYBCA', 'SYBCA', 'TYBCA', 'BCA', 'GENERAL'];
-  
+
   const getClassAndSem = (name) => {
     const upper = name.toUpperCase();
     let base = 'GENERAL';
@@ -501,30 +604,30 @@ export default function App() {
     else if (upper.includes('BCA')) base = 'BCA';
     else if (upper.includes('GENERAL')) base = 'GENERAL';
     else base = name; // For custom other classes
-    
+
     const semMatch = upper.match(/SEM(?:ESTER)?\s*([1-6])/i);
     const sem = semMatch ? parseInt(semMatch[1], 10) : 0;
-    
+
     return { base, sem };
   };
 
   const sortedClassNames = Object.keys(groupedSubjects).sort((a, b) => {
     const infoA = getClassAndSem(a);
     const infoB = getClassAndSem(b);
-    
+
     const orderA = classOrder.indexOf(infoA.base);
     const orderB = classOrder.indexOf(infoB.base);
-    
+
     if (orderA !== -1 && orderB !== -1) {
       if (orderA !== orderB) {
         return orderA - orderB;
       }
       return infoA.sem - infoB.sem;
     }
-    
+
     if (orderA !== -1) return -1;
     if (orderB !== -1) return 1;
-    
+
     return a.localeCompare(b);
   });
 
@@ -625,12 +728,12 @@ export default function App() {
                                   {subject.student_class && <span className="card-tag">{subject.student_class}</span>}
                                   {subject.subject && <span className="card-tag">{subject.subject}</span>}
                                   {subject.material_type && (
-                                    <span 
-                                      className="card-tag" 
-                                      style={{ 
-                                        border: '1px solid var(--card-border)', 
+                                    <span
+                                      className="card-tag"
+                                      style={{
+                                        border: '1px solid var(--card-border)',
                                         background: 'rgba(255,255,255,0.06)',
-                                        opacity: 0.9 
+                                        opacity: 0.9
                                       }}
                                     >
                                       {subject.material_type}
@@ -765,11 +868,11 @@ export default function App() {
                     <div className="input-group">
                       <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Class & Semester</label>
                       <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
-                        <select 
-                          name="studentClassSelect" 
+                        <select
+                          name="studentClassSelect"
                           value={adminClassSelect}
                           onChange={(e) => setAdminClassSelect(e.target.value)}
-                          required 
+                          required
                           style={{ flex: 1, padding: '14px 16px', background: 'var(--input-bg)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }}
                         >
                           <option value="FYBCA">FYBCA</option>
@@ -779,12 +882,12 @@ export default function App() {
                           <option value="General">General</option>
                           <option value="Other">Other</option>
                         </select>
-                        
-                        <select 
-                          name="semesterSelect" 
+
+                        <select
+                          name="semesterSelect"
                           value={adminSemesterSelect}
                           onChange={(e) => setAdminSemesterSelect(e.target.value)}
-                          required 
+                          required
                           style={{ flex: 1, padding: '14px 16px', background: 'var(--input-bg)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }}
                         >
                           <option value="N/A">N/A</option>
@@ -797,11 +900,11 @@ export default function App() {
                         </select>
                       </div>
                       {adminClassSelect === 'Other' && (
-                        <input 
-                          type="text" 
-                          name="customClass" 
-                          placeholder="Enter custom class name (e.g. B.Tech CS)" 
-                          required 
+                        <input
+                          type="text"
+                          name="customClass"
+                          placeholder="Enter custom class name (e.g. B.Tech CS)"
+                          required
                           style={{ width: '100%' }}
                         />
                       )}
@@ -877,9 +980,14 @@ export default function App() {
                               </td>
                               <td style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>{new Date(con.created_at).toLocaleString()}</td>
                               <td>
-                                <button onClick={() => handleDeleteContribution(con)} style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer' }}>
-                                  <Trash2 size={16} />
-                                </button>
+                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                  <button onClick={() => handleEditContributionClick(con)} style={{ color: 'var(--accent-primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} title="Edit Contribution">
+                                    <Edit size={16} />
+                                  </button>
+                                  <button onClick={() => handleDeleteContribution(con)} style={{ color: '#EF4444', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} title="Delete Contribution">
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -1085,31 +1193,55 @@ export default function App() {
                   <div className="modal-icon"><Lock size={28} /></div>
                   <h3 style={{ fontSize: '1.5rem', marginBottom: '12px', fontWeight: '600' }}>Download Document</h3>
                   <p style={{ color: 'var(--text-secondary)', marginBottom: '32px', fontSize: '0.95rem' }}>
-                    Enter email to download full pdf
+                    Please enter your name and feedback to download the full PDF.
                   </p>
                   <form onSubmit={handleModalSubmit}>
-                    <div className="input-group">
+                    <div className="input-group" style={{ textAlign: 'left', marginTop: 0 }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Name</label>
                       <input
-                        type="email"
-                        placeholder="name@example.com"
-                        value={email}
-                        onChange={(e) => { setEmail(e.target.value); if (emailError) setEmailError(''); }}
+                        type="text"
+                        placeholder="Your Name"
+                        value={downloadName}
+                        onChange={(e) => { setDownloadName(e.target.value); if (downloadError) setDownloadError(''); }}
                         disabled={isSubmitting}
-                        className={emailError ? 'error' : ''}
+                        className={downloadError && !downloadName.trim() ? 'error' : ''}
                       />
-                      {emailError && <span className="error-text">{emailError}</span>}
                     </div>
+                    <div className="input-group" style={{ textAlign: 'left' }}>
+                      <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>
+                        Feedback / Suggestions <span style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem', fontWeight: 'normal', marginLeft: '4px' }}>(Optional)</span>
+                      </label>
+                      <textarea
+                        placeholder="Your thoughts help us improve! What did you think of the website or note?"
+                        value={downloadFeedback}
+                        onChange={(e) => { setDownloadFeedback(e.target.value); if (downloadError) setDownloadError(''); }}
+                        disabled={isSubmitting}
+                        style={{
+                          width: '100%',
+                          padding: '14px 16px',
+                          background: 'var(--input-bg)',
+                          border: '1px solid var(--card-border)',
+                          borderRadius: 'var(--radius-sm)',
+                          color: 'var(--text-primary)',
+                          fontFamily: 'inherit',
+                          fontSize: '1rem',
+                          minHeight: '100px',
+                          resize: 'vertical'
+                        }}
+                      ></textarea>
+                    </div>
+                    {downloadError && <span className="error-text" style={{ display: 'block', marginBottom: '12px' }}>{downloadError}</span>}
                     <button type="submit" className="btn btn-primary w-full" style={{ justifyContent: 'center' }} disabled={isSubmitting}>
-                      {isSubmitting ? 'Processing...' : 'Download'}
+                      {isSubmitting ? 'Processing...' : 'Submit & Download'}
                     </button>
                   </form>
                 </motion.div>
               ) : (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                   <div className="modal-icon" style={{ background: '#171717', color: '#FFFFFF' }}><CheckCircle size={28} /></div>
-                  <h3 style={{ fontSize: '1.5rem', marginBottom: '12px', fontWeight: '600' }}>Access Granted</h3>
+                  <h3 style={{ fontSize: '1.5rem', marginBottom: '12px', fontWeight: '600' }}>Feedback Saved</h3>
                   <p style={{ color: 'var(--text-secondary)', marginBottom: '32px', fontSize: '0.95rem' }}>
-                    Your email has been verified. You can now download the complete document.
+                    Thank you! Your download should start automatically. Click below if it didn't:
                   </p>
                   <button className="btn btn-primary w-full" style={{ justifyContent: 'center' }} onClick={handleDownload}>
                     Download Now <Download size={18} />
@@ -1160,11 +1292,11 @@ export default function App() {
                     <div className="input-group" style={{ textAlign: 'left' }}>
                       <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Class & Semester</label>
                       <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
-                        <select 
-                          name="studentClassSelect" 
+                        <select
+                          name="studentClassSelect"
                           value={userClassSelect}
                           onChange={(e) => setUserClassSelect(e.target.value)}
-                          required 
+                          required
                           style={{ flex: 1, padding: '14px 16px', background: 'var(--input-bg)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }}
                         >
                           <option value="FYBCA">FYBCA</option>
@@ -1174,12 +1306,12 @@ export default function App() {
                           <option value="General">General</option>
                           <option value="Other">Other</option>
                         </select>
-                        
-                        <select 
-                          name="semesterSelect" 
+
+                        <select
+                          name="semesterSelect"
                           value={userSemesterSelect}
                           onChange={(e) => setUserSemesterSelect(e.target.value)}
-                          required 
+                          required
                           style={{ flex: 1, padding: '14px 16px', background: 'var(--input-bg)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }}
                         >
                           <option value="N/A">N/A</option>
@@ -1192,11 +1324,11 @@ export default function App() {
                         </select>
                       </div>
                       {userClassSelect === 'Other' && (
-                        <input 
-                          type="text" 
-                          name="customClass" 
-                          placeholder="Enter custom class name (e.g. B.Tech CS)" 
-                          required 
+                        <input
+                          type="text"
+                          name="customClass"
+                          placeholder="Enter custom class name (e.g. B.Tech CS)"
+                          required
                           style={{ width: '100%' }}
                         />
                       )}
@@ -1319,6 +1451,124 @@ export default function App() {
                   </p>
                 </motion.div>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Admin Edit Contribution Modal */}
+      <AnimatePresence>
+        {editingContribution && (
+          <motion.div
+            className="modal-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setEditingContribution(null)}
+          >
+            <motion.div
+              className="modal-content"
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button className="close-btn" onClick={() => setEditingContribution(null)}><X size={20} /></button>
+
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <div className="modal-icon"><Edit size={28} /></div>
+                <h3 style={{ fontSize: '1.5rem', marginBottom: '12px', fontWeight: '600' }}>Edit Contribution</h3>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '32px', fontSize: '0.95rem' }}>
+                  Update student upload details.
+                </p>
+                <form onSubmit={handleEditContributionSubmit}>
+                  <div className="input-group" style={{ textAlign: 'left', marginTop: 0 }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Student Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      placeholder="Student Name"
+                    />
+                  </div>
+                  
+                  <div className="input-group" style={{ textAlign: 'left' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Class & Semester</label>
+                    <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+                      <select
+                        value={editClassSelect}
+                        onChange={(e) => setEditClassSelect(e.target.value)}
+                        required
+                        style={{ flex: 1, padding: '14px 16px', background: 'var(--input-bg)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }}
+                      >
+                        <option value="FYBCA">FYBCA</option>
+                        <option value="SYBCA">SYBCA</option>
+                        <option value="TYBCA">TYBCA</option>
+                        <option value="BCA">BCA</option>
+                        <option value="General">General</option>
+                        <option value="Other">Other</option>
+                      </select>
+
+                      <select
+                        value={editSemesterSelect}
+                        onChange={(e) => setEditSemesterSelect(e.target.value)}
+                        required
+                        style={{ flex: 1, padding: '14px 16px', background: 'var(--input-bg)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }}
+                      >
+                        <option value="N/A">N/A</option>
+                        <option value="Sem 1">Sem 1</option>
+                        <option value="Sem 2">Sem 2</option>
+                        <option value="Sem 3">Sem 3</option>
+                        <option value="Sem 4">Sem 4</option>
+                        <option value="Sem 5">Sem 5</option>
+                        <option value="Sem 6">Sem 6</option>
+                      </select>
+                    </div>
+                    {editClassSelect === 'Other' && (
+                      <input
+                        type="text"
+                        placeholder="Enter custom class name (e.g. B.Tech CS)"
+                        required
+                        value={editCustomClass}
+                        onChange={(e) => setEditCustomClass(e.target.value)}
+                        style={{ width: '100%' }}
+                      />
+                    )}
+                  </div>
+
+                  <div className="input-group" style={{ textAlign: 'left' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Subject</label>
+                    <input
+                      type="text"
+                      required
+                      value={editSubject}
+                      onChange={(e) => setEditSubject(e.target.value)}
+                      placeholder="e.g. Mathematics, Physics..."
+                    />
+                  </div>
+
+                  <div className="input-group" style={{ textAlign: 'left' }}>
+                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: '500' }}>Material Type</label>
+                    <select
+                      value={editMaterialType}
+                      onChange={(e) => setEditMaterialType(e.target.value)}
+                      required
+                      style={{ width: '100%', padding: '14px 16px', background: 'var(--input-bg)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)', outline: 'none' }}
+                    >
+                      <option value="Notes">Notes</option>
+                      <option value="Project">Project</option>
+                      <option value="Exam Material">Exam Material</option>
+                      <option value="Syllabus">Syllabus</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+
+                  <button type="submit" className="btn btn-primary w-full" style={{ justifyContent: 'center' }} disabled={isEditSaving}>
+                    {isEditSaving ? 'Saving Changes...' : 'Save Changes'}
+                  </button>
+                </form>
+              </motion.div>
             </motion.div>
           </motion.div>
         )}
